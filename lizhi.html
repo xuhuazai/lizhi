@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极简文字播放器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: sans-serif;
+        }
+        html, body {
+            height: 100%;
+            background: #fff;
+            padding: 20px;
+        }
+        .player {
+            max-width: 400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .song-title {
+            font-size: 18px;
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .progress {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 2px;
+            background: #eee;
+            position: relative;
+            cursor: pointer;
+        }
+        .progress-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: #000;
+            width: 0%;
+        }
+        .time {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #999;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            margin: 20px 0;
+            font-size: 16px;
+        }
+        .control-btn {
+            border: none;
+            background: none;
+            color: #333;
+            cursor: pointer;
+            padding: 5px 10px;
+        }
+        .play-btn {
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .playlist {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .song-item {
+            padding: 8px 0;
+            font-size: 14px;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .song-item.active {
+            color: #000;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="player">
+        <div class="song-title" id="songTitle">未播放歌曲</div>
+
+        <div class="progress">
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="time">
+                <span id="currentTime">00:00</span>
+                <span id="totalTime">00:00</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" id="prevBtn">上一首</button>
+            <button class="control-btn play-btn" id="playBtn">播放</button>
+            <button class="control-btn" id="nextBtn">下一首</button>
+        </div>
+
+        <div class="playlist" id="playlist">
+            <div class="song-item">加载中...</div>
+        </div>
+    </div>
+
+    <script>
+        const audio = new Audio();
+        const playBtn = document.getElementById('playBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const currentTimeEl = document.getElementById('currentTime');
+        const totalTimeEl = document.getElementById('totalTime');
+        const songTitleEl = document.getElementById('songTitle');
+        const playlistEl = document.getElementById('playlist');
+
+        let songList = [];
+        let currentIndex = 0;
+        let isPlaying = false;
+
+        async function loadSongs() {
+            try {
+                const res = await fetch('https://cdn.jsdelivr.net/gh/nj-lizhi/song/audio/download.txt');
+                if (!res.ok) throw new Error('加载失败');
+                
+                const text = await res.text();
+                songList = text.split('\n')
+                    .filter(line => line.trim() && (line.endsWith('.mp3') || line.endsWith('.flac')))
+                    .map(url => {
+                        const fileName = url.split('/').pop();
+                        const title = fileName.substring(0, fileName.lastIndexOf('.'));
+                        return { title, url };
+                    });
+
+                renderPlaylist();
+            } catch (err) {
+                playlistEl.innerHTML = `<div class="song-item">${err.message}</div>`;
+            }
+        }
+
+        function renderPlaylist() {
+            playlistEl.innerHTML = '';
+            songList.forEach((song, index) => {
+                const item = document.createElement('div');
+                item.className = `song-item ${index === currentIndex ? 'active' : ''}`;
+                item.textContent = song.title;
+                item.onclick = () => {
+                    currentIndex = index;
+                    // 关键修复：首次点击歌曲时激活播放状态
+                    isPlaying = true;
+                    playSong();
+                };
+                playlistEl.appendChild(item);
+            });
+        }
+
+        function playSong() {
+            if (!songList.length) return;
+            
+            const song = songList[currentIndex];
+            audio.pause();
+            audio.src = song.url;
+            songTitleEl.textContent = song.title;
+            
+            // 更新列表选中状态
+            document.querySelectorAll('.song-item').forEach((item, i) => {
+                item.classList.remove('active');
+                if (i === currentIndex) item.classList.add('active');
+            });
+
+            // 加载完成后自动播放
+            audio.onloadedmetadata = () => {
+                audio.play().then(() => {
+                    playBtn.textContent = '暂停';
+                }).catch(() => {
+                    isPlaying = false;
+                    playBtn.textContent = '播放';
+                });
+            };
+            
+            // 同步按钮文字
+            playBtn.textContent = isPlaying ? '暂停' : '播放';
+        }
+
+        playBtn.onclick = () => {
+            if (!songList.length) {
+                loadSongs().then(() => {
+                    if (songList.length) {
+                        isPlaying = true;
+                        playSong();
+                    }
+                });
+                return;
+            }
+
+            if (isPlaying) {
+                audio.pause();
+                playBtn.textContent = '播放';
+            } else {
+                audio.play();
+                playBtn.textContent = '暂停';
+            }
+            isPlaying = !isPlaying;
+        };
+
+        prevBtn.onclick = () => {
+            if (!songList.length) return;
+            currentIndex = (currentIndex - 1 + songList.length) % songList.length;
+            isPlaying = true; // 切歌时保持播放状态
+            playSong();
+        };
+
+        nextBtn.onclick = () => {
+            if (!songList.length) return;
+            currentIndex = (currentIndex + 1) % songList.length;
+            isPlaying = true; // 切歌时保持播放状态
+            playSong();
+        };
+
+        audio.ontimeupdate = () => {
+            if (isNaN(audio.duration)) return;
+            const progress = (audio.currentTime / audio.duration) * 100;
+            progressFill.style.width = `${progress}%`;
+            currentTimeEl.textContent = formatTime(audio.currentTime);
+            totalTimeEl.textContent = formatTime(audio.duration);
+        };
+
+        progressBar.onclick = (e) => {
+            if (isNaN(audio.duration)) return;
+            const pos = (e.clientX - progressBar.getBoundingClientRect().left) / progressBar.offsetWidth;
+            audio.currentTime = pos * audio.duration;
+        };
+
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60).toString().padStart(2, '0');
+            const s = Math.floor(sec % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        audio.onended = () => nextBtn.click();
+
+        // 初始化加载歌曲列表
+        loadSongs();
+    </script>
+</body>
+</html>
