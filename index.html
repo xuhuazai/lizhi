@@ -115,6 +115,11 @@
         let currentIndex = 0;
         let isPlaying = false;
         let bufferTimer = null;
+        // 加载与重试控制，防止网络差导致卡死
+        const LOAD_TIMEOUT_MS = 15000; // 超时阈值
+        const MAX_RETRIES = 2; // 每首歌最大重试次数
+        let loadTimeout = null;
+        const retryCounts = {}; // key: song url or index -> count
 
         async function loadSongs() {
             try {
@@ -169,6 +174,31 @@
             updatePlaylistActive();
         }
 
+        function handleLoadFailure(reason) {
+            renderStatusPanel();
+            const key = String(currentIndex);
+            retryCounts[key] = (retryCounts[key] || 0) + 1;
+            const attempts = retryCounts[key];
+            console.log('[PLAYER] load failure', reason, 'attempts', attempts);
+            try { if (window.__player_push_log) window.__player_push_log('load.failure', `${reason} attempts:${attempts}`); } catch(e){}
+
+            if (attempts <= MAX_RETRIES) {
+                // 重试：短延迟后重新调用 playSong
+                setTimeout(() => {
+                    // 重新加载当前曲目
+                    playSong();
+                }, 800 + attempts * 300);
+            } else {
+                // 达到最大重试，跳到下一首并清理计时器
+                console.log('[PLAYER] skip to next after failures');
+                retryCounts[key] = 0;
+                currentIndex = (currentIndex + 1) % songList.length;
+                isPlaying = true;
+                playSong();
+                scrollToActiveSong();
+            }
+        }
+
         function updatePlaylistActive() {
             document.querySelectorAll('.song-item').forEach(item => {
                 if (Number(item.dataset.index) === currentIndex) item.classList.add('active');
@@ -184,11 +214,63 @@
             });
         }
 
+        // 状态面板与 MediaSession 支持
+        let lastAudioError = null;
+        function renderStatusPanel(){
+            let panel = document.getElementById('__player_ms_status');
+            if(!panel){
+                panel = document.createElement('div');
+                panel.id = '__player_ms_status';
+                panel.style.position = 'fixed';
+                panel.style.right = '8px';
+                panel.style.bottom = '8px';
+                panel.style.background = 'rgba(0,0,0,0.6)';
+                panel.style.color = '#fff';
+                panel.style.fontSize = '12px';
+                panel.style.padding = '8px';
+                panel.style.borderRadius = '8px';
+                panel.style.zIndex = 99999;
+                panel.style.maxWidth = '320px';
+                document.body.appendChild(panel);
+            }
+            const msSupported = !!navigator.mediaSession;
+            const msState = (navigator.mediaSession && navigator.mediaSession.playbackState) || '-';
+            const attempts = retryCounts[String(currentIndex)] || 0;
+            panel.innerHTML = `<div><strong>MediaSession:</strong> ${msSupported ? '支持' : '不支持'}</div><div><strong>state:</strong> ${msState}</div><div><strong>song:</strong> ${songList[currentIndex]?songList[currentIndex].title:'-'}</div><div><strong>retries:</strong> ${attempts}</div><div style="color:#f88"><strong>lastErr:</strong> ${lastAudioError? lastAudioError : '-'}</div>`;
+        }
+
+        function setupMediaSession(song){
+            if (!('mediaSession' in navigator)) return;
+            try{
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: song.title || '',
+                    artist: '李志',
+                    album: '',
+                    artwork: [
+                        // fallback tiny SVG as artwork to increase chance of being registered
+                        { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="100%" height="100%" fill="#6b8cff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="#fff">${(song.title||'歌').slice(0,2).toUpperCase()}</text></svg>`), sizes: '300x300', type: 'image/svg+xml' }
+                    ]
+                });
+
+                navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+                navigator.mediaSession.setActionHandler('play', ()=>{ audio.play().catch(()=>{}); navigator.mediaSession.playbackState = 'playing'; });
+                navigator.mediaSession.setActionHandler('pause', ()=>{ audio.pause(); navigator.mediaSession.playbackState = 'paused'; });
+                navigator.mediaSession.setActionHandler('previoustrack', ()=>{ prevBtn.click(); });
+                navigator.mediaSession.setActionHandler('nexttrack', ()=>{ nextBtn.click(); });
+            }catch(e){
+                console.warn('setupMediaSession failed', e);
+            }
+            renderStatusPanel();
+        }
+
         function playSong() {
             if (!songList.length) return;
             const song = songList[currentIndex];
             audio.pause();
             audio.preload = 'auto';
+            // 清理上一次的超时
+            try{ if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; } }catch(e){}
             audio.src = song.url;
             songTitleEl.textContent = song.title;
             artistEl.textContent = '李志';
@@ -196,18 +278,31 @@
             coverEl.textContent = song.title.slice(0,2).toUpperCase();
 
             updatePlaylistActive();
+            // 更新 MediaSession metadata / handlers（如浏览器/车机支持）
+            try{ setupMediaSession(song); }catch(e){}
+            renderStatusPanel();
+            // 设置加载超时，避免在网络极差时永远卡住
+            loadTimeout = setTimeout(()=>{
+                loadTimeout = null;
+                handleLoadFailure('load_timeout');
+            }, LOAD_TIMEOUT_MS);
 
             audio.onloadedmetadata = () => {
+                // metadata 可用时清理加载超时
+                try{ if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; } }catch(e){}
                 // update buffered UI once metadata is available
                 updateBuffer();
                 if (bufferTimer) clearInterval(bufferTimer);
                 bufferTimer = setInterval(updateBuffer, 700);
+                // 尝试播放，若被阻止则视为加载失败
                 audio.play().then(() => {
                     isPlaying = true;
                     playBtn.textContent = '❚❚';
-                }).catch(() => {
+                }).catch((err) => {
+                    console.log('[PLAYER] play rejected onloadedmetadata', err);
                     isPlaying = false;
                     playBtn.textContent = '▶';
+                    handleLoadFailure('play_rejected');
                 });
             };
         }
@@ -234,6 +329,8 @@
                 });
             }
             isPlaying = !isPlaying;
+            try{ if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'; }catch(e){}
+            renderStatusPanel();
         };
 
         prevBtn.onclick = () => {
@@ -296,9 +393,33 @@
             // restore play icon when actually playing
             if (isPlaying) playBtn.textContent = '❚❚';
             updateBuffer();
+            try{ if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; }catch(e){}
+            renderStatusPanel();
+        });
+        audio.addEventListener('pause', ()=>{
+            try{ if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; }catch(e){}
+            renderStatusPanel();
+        });
+        audio.addEventListener('ended', ()=>{
+            try{ if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; }catch(e){}
+            renderStatusPanel();
         });
         audio.addEventListener('canplay', ()=>{
             updateBuffer();
+        });
+        // 当可以完整播放到足够缓冲时清理超时并尝试恢复播放
+        audio.addEventListener('canplaythrough', ()=>{
+            try{ if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; } }catch(e){}
+            if (isPlaying) {
+                audio.play().catch(()=>{});
+            }
+        });
+
+        audio.addEventListener('error', (ev)=>{
+            console.log('[PLAYER] audio.error', ev);
+            lastAudioError = (ev && ev.message) ? ev.message : JSON.stringify(ev);
+            renderStatusPanel();
+            handleLoadFailure('audio_error');
         });
         // clear interval on unload
         window.addEventListener('beforeunload', ()=>{ if (bufferTimer) clearInterval(bufferTimer); });
