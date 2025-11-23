@@ -115,6 +115,103 @@
         let currentIndex = 0;
         let isPlaying = false;
         let bufferTimer = null;
+        // debug 开关：仅在 URL 包含 ?debug=1 时为 true
+        const DEBUG = (new URLSearchParams(location.search)).get('debug') === '1';
+        // 收藏功能
+        const FAVORITES_KEY = 'lizhi_favorites_v1';
+        let favorites = [];
+        function loadFavorites(){
+            try{
+                const raw = localStorage.getItem(FAVORITES_KEY);
+                favorites = raw ? JSON.parse(raw) : [];
+            }catch(e){ favorites = []; }
+        }
+        function saveFavorites(){
+            try{ localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites || [])); }catch(e){}
+        }
+        function isFavorite(url){ return favorites.indexOf(url) !== -1; }
+        function toggleFavorite(url){
+            if (!url) return;
+            const i = favorites.indexOf(url);
+            if (i === -1) favorites.unshift(url);
+            else favorites.splice(i,1);
+            saveFavorites();
+            renderPlaylist();
+            renderStatusPanel();
+        }
+
+        // -----------------------------
+        // 事件日志与调试面板（仅 DEBUG 时启用）
+        // -----------------------------
+        const EVENT_LOG_KEY = '__player_event_log';
+        const MAX_EVENT_LOG = 200;
+
+        function readEventLog(){
+            if (!DEBUG) return [];
+            try{ return JSON.parse(sessionStorage.getItem(EVENT_LOG_KEY) || '[]'); }catch(e){ return []; }
+        }
+        function writeEventLog(log){ if (!DEBUG) return; try{ sessionStorage.setItem(EVENT_LOG_KEY, JSON.stringify(log.slice(-MAX_EVENT_LOG))); }catch(e){} }
+
+        function pushLog(name, detail){
+            if (!DEBUG) return;
+            const log = readEventLog();
+            const entry = { t: new Date().toISOString(), name, detail: detail || null, visibility: document.visibilityState, audioPaused: !!audio.paused, src: audio.src || null };
+            log.push(entry);
+            writeEventLog(log);
+            // 更新 UI
+            renderStatusPanel();
+            // also console
+            console.log('[PLAYER-LOG]', entry);
+        }
+
+        // 外部也可推送日志
+        try{ window.__player_push_log = pushLog; }catch(e){}
+
+        // 快捷导出调试日志
+        function exportEventLog(){
+            const log = readEventLog();
+            const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `lizhi-player-log-${(new Date()).toISOString()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 绑定常见事件到日志
+        if (DEBUG) {
+            document.addEventListener('visibilitychange', ()=> pushLog('visibilitychange'));
+            window.addEventListener('focus', ()=> pushLog('focus'));
+            window.addEventListener('blur', ()=> pushLog('blur'));
+            window.addEventListener('pageshow', (e)=> pushLog('pageshow', e && e.persisted ? 'bfcache:restored' : 'normal'));
+            window.addEventListener('pagehide', (e)=> pushLog('pagehide', e && e.persisted ? 'bfcache:stored' : 'normal'));
+            window.addEventListener('beforeunload', ()=> pushLog('beforeunload'));
+            window.addEventListener('unload', ()=> pushLog('unload'));
+            window.addEventListener('hashchange', ()=> pushLog('hashchange'));
+            window.addEventListener('popstate', ()=> pushLog('popstate'));
+            window.addEventListener('storage', (e)=> pushLog('storage', `${e.key} changed`));
+        }
+
+        // DEBUG: 拦截 fetch 以记录网络请求（仅在 debug 模式）
+        if (DEBUG && window.fetch) {
+            const __orig_fetch = window.fetch.bind(window);
+            window.fetch = async function(...args){
+                const url = args[0] && String(args[0]);
+                const start = Date.now();
+                pushLog('fetch.start', url);
+                try{
+                    const res = await __orig_fetch(...args);
+                    const time = Date.now() - start;
+                    pushLog('fetch.end', `${url} status:${res.status} time:${time}ms`);
+                    return res;
+                }catch(err){
+                    const time = Date.now() - start;
+                    pushLog('fetch.error', `${url} err:${err && err.message} time:${time}ms`);
+                    throw err;
+                }
+            };
+        }
         // 加载与重试控制，防止网络差导致卡死
         const LOAD_TIMEOUT_MS = 15000; // 超时阈值
         const MAX_RETRIES = 2; // 每首歌最大重试次数
@@ -139,8 +236,10 @@
                 filteredList = [...songList];
                 renderPlaylist();
                 initSearch();
+                pushLog('songs.loaded', `count:${songList.length}`);
             } catch (err) {
                 playlistEl.innerHTML = `<div class="song-item">${err.message}</div>`;
+                pushLog('songs.load_error', err.message);
             }
         }
 
@@ -154,20 +253,49 @@
                 return;
             }
 
-            filteredList.forEach((song) => {
+            // 将收藏的歌曲排到前面（并保持其它排序）
+            const favs = [];
+            const others = [];
+            filteredList.forEach(s => { if (isFavorite(s.url)) favs.push(s); else others.push(s); });
+            const displayList = [...favs, ...others];
+
+            displayList.forEach((song) => {
                 const originalIndex = songList.findIndex(item => item.url === song.url);
                 const item = document.createElement('div');
                 item.className = 'song-item';
                 item.dataset.index = originalIndex;
+
+                const left = document.createElement('div');
+                left.style.display = 'flex';
+                left.style.alignItems = 'center';
+                left.style.gap = '8px';
+
+                const favBtn = document.createElement('button');
+                favBtn.className = 'btn';
+                favBtn.style.fontSize = '16px';
+                favBtn.style.width = '28px';
+                favBtn.style.height = '28px';
+                favBtn.style.padding = '0';
+                favBtn.style.lineHeight = '1';
+                favBtn.textContent = isFavorite(song.url) ? '★' : '☆';
+                favBtn.title = '收藏/取消收藏';
+                favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(song.url); };
+
                 const titleSpan = document.createElement('span');
                 titleSpan.textContent = song.title;
-                item.appendChild(titleSpan);
+
+                left.appendChild(favBtn);
+                left.appendChild(titleSpan);
+
+                item.appendChild(left);
+
                 item.onclick = () => {
                     currentIndex = originalIndex;
                     isPlaying = true;
                     playSong();
                     scrollToActiveSong();
                 };
+
                 playlistEl.appendChild(item);
             });
 
@@ -175,6 +303,7 @@
         }
 
         function handleLoadFailure(reason) {
+            pushLog('load.failure', reason);
             renderStatusPanel();
             const key = String(currentIndex);
             retryCounts[key] = (retryCounts[key] || 0) + 1;
@@ -185,12 +314,14 @@
             if (attempts <= MAX_RETRIES) {
                 // 重试：短延迟后重新调用 playSong
                 setTimeout(() => {
+                    pushLog('retry', `index:${currentIndex} attempt:${attempts}`);
                     // 重新加载当前曲目
                     playSong();
                 }, 800 + attempts * 300);
             } else {
                 // 达到最大重试，跳到下一首并清理计时器
                 console.log('[PLAYER] skip to next after failures');
+                pushLog('skip.to.next', `from:${key}`);
                 retryCounts[key] = 0;
                 currentIndex = (currentIndex + 1) % songList.length;
                 isPlaying = true;
@@ -217,6 +348,7 @@
         // 状态面板与 MediaSession 支持
         let lastAudioError = null;
         function renderStatusPanel(){
+            if (!DEBUG) return;
             let panel = document.getElementById('__player_ms_status');
             if(!panel){
                 panel = document.createElement('div');
@@ -236,7 +368,23 @@
             const msSupported = !!navigator.mediaSession;
             const msState = (navigator.mediaSession && navigator.mediaSession.playbackState) || '-';
             const attempts = retryCounts[String(currentIndex)] || 0;
-            panel.innerHTML = `<div><strong>MediaSession:</strong> ${msSupported ? '支持' : '不支持'}</div><div><strong>state:</strong> ${msState}</div><div><strong>song:</strong> ${songList[currentIndex]?songList[currentIndex].title:'-'}</div><div><strong>retries:</strong> ${attempts}</div><div style="color:#f88"><strong>lastErr:</strong> ${lastAudioError? lastAudioError : '-'}</div>`;
+            const events = readEventLog().slice(-20).reverse();
+            let html = '';
+            html += `<div style="margin-bottom:6px"><strong>MediaSession:</strong> ${msSupported ? '支持' : '不支持'} &nbsp; <strong>state:</strong> ${msState}</div>`;
+            html += `<div style="margin-bottom:6px"><strong>song:</strong> ${songList[currentIndex]?songList[currentIndex].title:'-'} &nbsp; <strong>retries:</strong> ${attempts}</div>`;
+            html += `<div style="margin-bottom:6px;color:#f88"><strong>lastErr:</strong> ${lastAudioError? lastAudioError : '-'}</div>`;
+            html += `<div style="margin:6px 0"><button id="__dbg_export" style="margin-right:6px">导出日志</button><button id="__dbg_clear">清除日志</button></div>`;
+            html += `<div style="max-height:160px;overflow:auto;border-top:1px solid rgba(255,255,255,0.04);padding-top:6px">`;
+            if (events.length === 0) html += '<div style="color:#9aa4b2">(无事件)</div>';
+            else events.forEach(ev => {
+                html += `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02)"><div style="font-weight:600">${ev.t} — ${ev.name}</div><div style="color:#9aa4b2;font-size:11px">${ev.detail||''} vis:${ev.visibility} paused:${ev.audioPaused} src:${ev.src?decodeURIComponent(ev.src.split('/').pop()):'-'}</div></div>`;
+            });
+            html += `</div>`;
+            panel.innerHTML = html;
+            const exp = panel.querySelector('#__dbg_export');
+            const clr = panel.querySelector('#__dbg_clear');
+            if (exp) exp.onclick = exportEventLog;
+            if (clr) clr.onclick = ()=>{ sessionStorage.removeItem(EVENT_LOG_KEY); renderStatusPanel(); };
         }
 
         function setupMediaSession(song){
@@ -272,6 +420,8 @@
             // 清理上一次的超时
             try{ if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; } }catch(e){}
             audio.src = song.url;
+            pushLog('song.select', song.title);
+            pushLog('audio.src_set', song.url);
             songTitleEl.textContent = song.title;
             artistEl.textContent = '李志';
             // cover: show first 2 chars as fallback
@@ -456,6 +606,8 @@
         audio.onended = () => nextBtn.click();
 
         // 初始化加载歌曲列表
+        // 加载本地收藏与歌曲列表
+        loadFavorites();
         loadSongs();
     </script>
 </body>
