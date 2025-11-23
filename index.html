@@ -117,6 +117,10 @@
         let bufferTimer = null;
         // debug 开关：仅在 URL 包含 ?debug=1 时为 true
         const DEBUG = (new URLSearchParams(location.search)).get('debug') === '1';
+        // 调试面板折叠状态存储键
+        const COLLAPSED_KEY = 'lizhi_dbg_panel_collapsed_v1';
+        function isPanelCollapsed(){ try{ return localStorage.getItem(COLLAPSED_KEY) === '1'; }catch(e){ return false; } }
+        function setPanelCollapsed(v){ try{ localStorage.setItem(COLLAPSED_KEY, v ? '1' : '0'); }catch(e){} }
         // 收藏功能
         const FAVORITES_KEY = 'lizhi_favorites_v1';
         let favorites = [];
@@ -369,8 +373,23 @@
             const msState = (navigator.mediaSession && navigator.mediaSession.playbackState) || '-';
             const attempts = retryCounts[String(currentIndex)] || 0;
             const events = readEventLog().slice(-20).reverse();
+            const collapsed = isPanelCollapsed();
+
+            if (collapsed) {
+                // Collapsed view: a small toggle button
+                panel.style.maxWidth = '120px';
+                panel.style.padding = '6px';
+                panel.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><button id="__dbg_toggle" style="font-size:14px;padding:4px 8px">▶ 调试</button><div style="font-size:11px;color:#9aa4b2">${msSupported ? 'MS:✓' : 'MS:✗'}</div></div>`;
+                const tog = panel.querySelector('#__dbg_toggle');
+                if (tog) tog.onclick = ()=>{ setPanelCollapsed(false); renderStatusPanel(); pushLog('panel.expand'); };
+                return;
+            }
+
+            // Expanded view
+            panel.style.maxWidth = '420px';
+            panel.style.padding = '8px';
             let html = '';
-            html += `<div style="margin-bottom:6px"><strong>MediaSession:</strong> ${msSupported ? '支持' : '不支持'} &nbsp; <strong>state:</strong> ${msState}</div>`;
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div><strong>MediaSession:</strong> ${msSupported ? '支持' : '不支持'} &nbsp; <strong>state:</strong> ${msState}</div><div><button id="__dbg_toggle" style="font-size:12px;padding:2px 6px">收起</button></div></div>`;
             html += `<div style="margin-bottom:6px"><strong>song:</strong> ${songList[currentIndex]?songList[currentIndex].title:'-'} &nbsp; <strong>retries:</strong> ${attempts}</div>`;
             html += `<div style="margin-bottom:6px;color:#f88"><strong>lastErr:</strong> ${lastAudioError? lastAudioError : '-'}</div>`;
             html += `<div style="margin:6px 0"><button id="__dbg_export" style="margin-right:6px">导出日志</button><button id="__dbg_clear">清除日志</button></div>`;
@@ -381,8 +400,11 @@
             });
             html += `</div>`;
             panel.innerHTML = html;
+
+            const tog = panel.querySelector('#__dbg_toggle');
             const exp = panel.querySelector('#__dbg_export');
             const clr = panel.querySelector('#__dbg_clear');
+            if (tog) tog.onclick = ()=>{ setPanelCollapsed(true); renderStatusPanel(); pushLog('panel.collapse'); };
             if (exp) exp.onclick = exportEventLog;
             if (clr) clr.onclick = ()=>{ sessionStorage.removeItem(EVENT_LOG_KEY); renderStatusPanel(); };
         }
