@@ -50,8 +50,13 @@
             .playlist{max-height:none;flex:1;min-height:0}
         }
     </style>
+    <!-- MediaElement (播放库) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mediaelement@5.0.4/build/mediaelementplayer.min.css" />
 </head>
 <body>
+    <!-- 原生 audio 元素，MediaElement 将基于此元素工作 -->
+    <audio id="audioElem" preload="auto" crossorigin="anonymous"></audio>
+    <script src="https://cdn.jsdelivr.net/npm/mediaelement@5.0.4/build/mediaelement-and-player.min.js"></script>
     <div class="wrap">
         <div class="player-card">
             <div class="top">
@@ -95,7 +100,8 @@
     </div>
 
     <script>
-        const audio = new Audio();
+        const audio = document.getElementById('audioElem');
+        let mediaPlayer = null;
         const playBtn = document.getElementById('playBtn');
         const prevBtn = document.getElementById('prevBtn');
         const nextBtn = document.getElementById('nextBtn');
@@ -215,6 +221,21 @@
                     throw err;
                 }
             };
+        }
+        // 初始化 MediaElementPlayer（如果库已加载）
+        try{
+            if (window.MediaElementPlayer && audio) {
+                mediaPlayer = new MediaElementPlayer(audio, {
+                    features: [],
+                    // 不显示默认控件，保持页面自定义控件
+                    success: function(mediaElement, originalNode) {
+                        try{ if (DEBUG) pushLog('mediaelement.init', navigator.userAgent); }catch(e){}
+                    }
+                });
+            }
+        }catch(e){
+            console.warn('mediaelement init failed', e);
+            try{ if (DEBUG) pushLog('mediaelement.init_error', String(e)); }catch(_){ }
         }
         // 加载与重试控制，防止网络差导致卡死
         const LOAD_TIMEOUT_MS = 15000; // 超时阈值
