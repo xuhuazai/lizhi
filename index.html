@@ -30,7 +30,7 @@
 
         .controls{display:flex;gap:18px;align-items:center;justify-content:center;padding:6px}
         .btn{background:transparent;border:none;color:inherit;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-        .big-btn{width:64px;height:64px;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,0.06), rgba(255,255,255,0.03));box-shadow:0 6px 18px rgba(11,20,32,0.6);font-size:20px}
+        .big-btn{width:72px;height:72px;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,0.06), rgba(255,255,255,0.03));box-shadow:0 6px 18px rgba(11,20,32,0.6);font-size:22px}
 
         .search-box{margin-top:6px}
         .search-input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:14px}
@@ -47,7 +47,27 @@
             .player-card{max-height:calc(100vh - 16px);padding:12px}
             .cover{width:72px;height:72px}
             .big-btn{width:56px;height:56px}
+            /* 在移动设备上放大上一首/下一首按钮，增大触控目标 */
+            .controls .btn:not(.big-btn){
+                width:56px;
+                height:56px;
+                border-radius:50%;
+                background:linear-gradient(180deg,rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+                box-shadow:0 6px 18px rgba(11,20,32,0.6);
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                font-size:18px;
+            }
+            .controls .btn svg{width:22px;height:22px}
             .playlist{max-height:none;flex:1;min-height:0}
+        }
+        /* 大屏 / 车机优化：进一步放大控件和封面，增加触控目标 */
+        @media(min-width:900px){
+            .big-btn{width:96px;height:96px;font-size:28px}
+            .controls .btn:not(.big-btn){width:88px;height:88px;border-radius:50%;font-size:20px}
+            .cover{width:120px;height:120px;flex:0 0 120px}
+            .controls .btn svg{width:28px;height:28px}
         }
     </style>
     <link rel="icon" sizes="any" mask href="./favicon.ico">
@@ -304,8 +324,31 @@
                 favBtn.style.padding = '0';
                 favBtn.style.lineHeight = '1';
                 favBtn.textContent = isFavorite(song.url) ? '★' : '☆';
-                favBtn.title = '收藏/取消收藏';
-                favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(song.url); };
+                favBtn.title = '长按收藏/取消收藏';
+                // 为减少误触：改为长按（600ms）确认收藏/取消；单击仅提示
+                (function(btn, s){
+                    let pressTimer = null;
+                    const LONGPRESS_MS = 600;
+                    function clearPress(){ if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }
+                    btn.addEventListener('pointerdown', (ev) => {
+                        ev.stopPropagation();
+                        // start longpress timer
+                        pressTimer = setTimeout(()=>{
+                            toggleFavorite(s.url);
+                            try{ pushLog('favorite.longpress', s.url); }catch(e){}
+                            pressTimer = null;
+                        }, LONGPRESS_MS);
+                    });
+                    btn.addEventListener('pointerup', (ev) => {
+                        ev.stopPropagation();
+                        if (pressTimer) {
+                            // short tap -> notify user to long-press
+                            clearPress();
+                            showToast('长按以收藏/取消收藏');
+                        }
+                    });
+                    btn.addEventListener('pointercancel', ()=>{ clearPress(); });
+                })(favBtn, song);
 
                 const titleSpan = document.createElement('span');
                 titleSpan.textContent = song.title;
@@ -456,6 +499,46 @@
             renderStatusPanel();
         }
 
+        // 简单吐司提示（短时间显示）
+        function showToast(msg){
+            try{
+                let t = document.getElementById('__lizhi_toast');
+                if (!t) {
+                    t = document.createElement('div');
+                    t.id = '__lizhi_toast';
+                    t.style.position = 'fixed';
+                    t.style.left = '50%';
+                    t.style.bottom = '20px';
+                    t.style.transform = 'translateX(-50%)';
+                    t.style.background = 'rgba(0,0,0,0.7)';
+                    t.style.color = '#fff';
+                    t.style.padding = '8px 12px';
+                    t.style.borderRadius = '8px';
+                    t.style.zIndex = 999999;
+                    t.style.transition = 'opacity 220ms ease';
+                    t.style.opacity = '0';
+                    document.body.appendChild(t);
+                }
+                t.textContent = msg;
+                t.style.opacity = '1';
+                if (t._timeout) clearTimeout(t._timeout);
+                t._timeout = setTimeout(()=>{ t.style.opacity = '0'; }, 1300);
+            }catch(e){ console.warn('toast failed', e); }
+        }
+
+        let nextScheduled = false;
+        function playNext(reason){
+            try{ pushLog('play.next.request', reason || 'auto'); }catch(e){}
+            if (!songList.length) return;
+            currentIndex = (currentIndex + 1) % songList.length;
+            isPlaying = true;
+            nextScheduled = false;
+            // ensure retryCounts reset for new track
+            try{ retryCounts[String(currentIndex)] = retryCounts[String(currentIndex)] || 0; }catch(e){}
+            playSong();
+            scrollToActiveSong();
+        }
+
         function playSong() {
             if (!songList.length) return;
             const song = songList[currentIndex];
@@ -464,6 +547,8 @@
             // 清理上一次的超时
             try{ if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; } }catch(e){}
             audio.src = song.url;
+            // Some platforms (iOS) are more reliable if load() is explicitly called
+            try{ audio.load(); }catch(e){}
             pushLog('song.select', song.title);
             pushLog('audio.src_set', song.url);
             songTitleEl.textContent = song.title;
@@ -492,6 +577,7 @@
                 audio.play().then(() => {
                     isPlaying = true;
                     playBtn.textContent = '❚❚';
+                    nextScheduled = false;
                 }).catch((err) => {
                     console.log('[PLAYER] play rejected onloadedmetadata', err);
                     isPlaying = false;
@@ -554,6 +640,22 @@
             progressFill.style.width = `${progress}%`;
             currentTimeEl.textContent = formatTime(audio.currentTime);
             totalTimeEl.textContent = formatTime(audio.duration);
+            // 如果接近结束（比如剩余 < 0.8s），在锁屏或特殊环境下 ended 可能不可靠
+            try{
+                const remain = audio.duration - audio.currentTime;
+                if (remain <= 0.8 && !nextScheduled && audio.duration > 0 && isPlaying) {
+                    nextScheduled = true;
+                    // schedule immediate next track attempt
+                    setTimeout(()=>{
+                        // double-check we're still near end
+                        if (audio.duration - audio.currentTime <= 1.2) {
+                            playNext('near_end');
+                        } else {
+                            nextScheduled = false;
+                        }
+                    }, 300);
+                }
+            }catch(e){}
         };
 
         // update buffered progress using audio.buffered ranges
