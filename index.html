@@ -325,8 +325,12 @@
                 favBtn.style.height = '28px';
                 favBtn.style.padding = '0';
                 favBtn.style.lineHeight = '1';
+                favBtn.style.userSelect = 'none';
                 favBtn.textContent = isFavorite(song.url) ? '★' : '☆';
                 favBtn.title = '长按收藏/取消收藏';
+                // 阻止长按弹出原生菜单
+                favBtn.addEventListener('pointerdown', e => { e.preventDefault(); });
+                favBtn.addEventListener('touchstart', e => { e.preventDefault(); });
                 // 为减少误触：改为长按（600ms）确认收藏/取消；单击仅提示
                 (function(btn, s){
                     let pressTimer = null;
