@@ -138,6 +138,7 @@
         const searchInput = document.getElementById('searchInput');
         const coverEl = document.getElementById('cover');
         const artistEl = document.getElementById('artist');
+        const originalTitle = document.title;
 
         let songList = [];
         let filteredList = [];
@@ -561,6 +562,7 @@
             artistEl.textContent = '李志';
             // cover: show first 2 chars as fallback
             coverEl.textContent = song.title.slice(0,2).toUpperCase();
+            document.title = `${song.title} | ${originalTitle}`;
 
             updatePlaylistActive();
             // 更新 MediaSession metadata / handlers（如浏览器/车机支持）
