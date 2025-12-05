@@ -13,61 +13,91 @@
             --glass: rgba(255,255,255,0.04);
         }
         *{box-sizing:border-box;margin:0;padding:0}
-        html,body{height:100vh;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",Arial; background: linear-gradient(180deg,#071026 0%, #071833 60%); color:#e6eef8; -webkit-font-smoothing:antialiased;overflow:hidden}
+        html,body{
+            height:100vh;
+            margin:0;
+            font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",Arial;
+            font-size:16px;
+            background: linear-gradient(180deg,#071026 0%, #071833 60%);
+            color:#e6eef8;
+            -webkit-font-smoothing:antialiased;
+            overflow:hidden
+        }
         .wrap{max-width:760px;margin:0 auto;padding:20px;width:100%;height:100vh;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
         .player-card{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02)); border-radius:16px; padding:16px; box-shadow:0 6px 30px rgba(2,6,23,0.6); display:flex; flex-direction:column; gap:12px; max-height:calc(100% - 40px); overflow:hidden; width:100%}
         .top{display:flex;gap:12px;align-items:center}
         .cover{width:84px;height:84px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#6b8cff);flex:0 0 84px;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.95)}
         .meta{flex:1;min-width:0}
-        .title{font-size:16px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .artist{font-size:13px;color:var(--muted);margin-top:6px}
+        .title{font-size:18px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .artist{font-size:14px;color:var(--muted);margin-top:7px}
 
         .progress-wrap{padding:6px 0}
-        .progress-bar{height:6px;background:var(--glass);border-radius:999px;position:relative;overflow:hidden;touch-action:none}
+        .progress-bar{height:8px;background:var(--glass);border-radius:999px;position:relative;overflow:hidden;touch-action:none}
         .progress-buffer{position:absolute;left:0;top:0;height:100%;background:rgba(255,255,255,0.06);width:0}
         .progress-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent),#6b8cff);width:0}
-        .time{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:8px}
+        .time{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:8px}
 
-        .controls{display:flex;gap:18px;align-items:center;justify-content:center;padding:6px}
-        .btn{background:transparent;border:none;color:inherit;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-        .big-btn{width:72px;height:72px;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,0.06), rgba(255,255,255,0.03));box-shadow:0 6px 18px rgba(11,20,32,0.6);font-size:22px}
+        .controls{display:flex;gap:20px;align-items:center;justify-content:center;padding:8px}
+        .btn{
+            background:transparent;
+            border:none;
+            color:inherit;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+            font-size:18px;
+        }
+        .big-btn{
+            width:64px;
+            height:64px;
+            border-radius:50%;
+            background:linear-gradient(180deg,rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+            box-shadow:0 6px 18px rgba(11,20,32,0.6);
+            font-size:24px;
+        }
 
         .search-box{margin-top:6px}
         .search-input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:14px}
 
         .playlist{overflow:auto;margin-top:8px;border-radius:8px;padding:8px;background:transparent;flex:1;min-height:0}
-        .song-item{padding:10px 12px;border-radius:8px;color:var(--muted);font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+        .song-item{padding:12px 14px;border-radius:9px;color:var(--muted);font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:10px}
         .song-item + .song-item{margin-top:6px}
         .song-item.active{background:linear-gradient(90deg, rgba(255,107,107,0.08), rgba(107,140,255,0.06));color:#fff}
-        .no-result{Padding:12px;text-align:center;color:var(--muted)}
+        .no-result{Padding:12px;text-align:center;color:var(--muted);font-size:15px}
 
         @media(min-width:720px){.wrap{padding:24px}.player-card{padding:20px}}
         @media(max-width:420px){
+            html,body{font-size:17px;}
             .wrap{padding:12px; margin:8px auto; width:calc(100% - 16px)}
             .player-card{max-height:calc(100vh - 16px);padding:12px}
-            .cover{width:72px;height:72px}
-            .big-btn{width:56px;height:56px}
+            .cover{width:70px;height:70px}
+            .big-btn{width:54px;height:54px;font-size:22px}
             /* 在移动设备上放大上一首/下一首按钮，增大触控目标 */
             .controls .btn:not(.big-btn){
-                width:56px;
-                height:56px;
+                width:48px;
+                height:48px;
                 border-radius:50%;
                 background:linear-gradient(180deg,rgba(255,255,255,0.04), rgba(255,255,255,0.02));
                 box-shadow:0 6px 18px rgba(11,20,32,0.6);
                 display:inline-flex;
                 align-items:center;
                 justify-content:center;
-                font-size:18px;
+                font-size:16px;
             }
-            .controls .btn svg{width:22px;height:22px}
+            .controls .btn svg{width:20px;height:20px}
             .playlist{max-height:none;flex:1;min-height:0}
         }
         /* 大屏 / 车机优化：进一步放大控件和封面，增加触控目标 */
         @media(min-width:900px){
-            .big-btn{width:96px;height:96px;font-size:28px}
-            .controls .btn:not(.big-btn){width:88px;height:88px;border-radius:50%;font-size:20px}
-            .cover{width:120px;height:120px;flex:0 0 120px}
+            html,body{font-size:18px;}
+            .big-btn{width:80px;height:80px;font-size:28px}
+            .controls .btn:not(.big-btn){width:64px;height:64px;border-radius:50%;font-size:20px}
+            .cover{width:110px;height:110px;flex:0 0 110px}
             .controls .btn svg{width:28px;height:28px}
+            .title{font-size:22px;}
+            .artist{font-size:16px;}
+            .song-item{font-size:17px;}
         }
     </style>
     <link rel="icon" sizes="any" mask href="./static/images/favicon.ico">
@@ -321,7 +351,7 @@
 
                 const favBtn = document.createElement('button');
                 favBtn.className = 'btn';
-                favBtn.style.fontSize = '16px';
+                favBtn.style.fontSize = '20px';
                 favBtn.style.width = '28px';
                 favBtn.style.height = '28px';
                 favBtn.style.padding = '0';
