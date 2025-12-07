@@ -6,11 +6,44 @@
     <title>李志播放器</title>
     <style>
         :root{
-            --bg:#0f1724;
-            --card:#0b1220;
+            --bg:#071026; /* page background (dark) */
+            --card: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
             --accent:#ff6b6b;
+            --accent2:#6b8cff;
             --muted:#9aa4b2;
             --glass: rgba(255,255,255,0.04);
+            --text: #e6eef8;
+            --panel-bg: rgba(0,0,0,0.6);
+            --panel-border: rgba(255,255,255,0.04);
+            --play-btn-bg: #ffffff;
+            --play-btn-icon: var(--accent);
+            --control-color: var(--text);
+            --progress-track: rgba(255,255,255,0.03);
+            --progress-buffer: rgba(255,255,255,0.06);
+            --search-bg: rgba(255,255,255,0.02);
+            --star-color: #ffcc33;
+            --active-bg: rgba(10,48,78,0.7);
+            --list-item-bg: transparent;
+        }
+        /* 浅色主题变量（切换到白色系） */
+        .theme-light {
+            --bg: linear-gradient(180deg,#f6f7fb 0%, #eef2f6 60%);
+            --card: #ffffff;
+            
+            --muted: #586069;
+            --glass: rgba(2,6,23,0.04);
+            --text: #0b1320;
+            --panel-bg: rgba(255,255,255,0.95);
+            --panel-border: rgba(0,0,0,0.06);
+            --play-btn-bg: #ffffff;
+            --play-btn-icon: var(--accent);
+            --control-color: #111827;
+            --progress-track: rgba(0,0,0,0.06);
+            --progress-buffer: rgba(0,0,0,0.04);
+            --search-bg: rgba(0,0,0,0.03);
+            --star-color: #ffcc33;
+            --active-bg: rgba(74,144,217,0.12);
+            --list-item-bg: transparent;
         }
         *{box-sizing:border-box;margin:0;padding:0}
         html,body{
@@ -18,23 +51,23 @@
             margin:0;
             font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",Arial;
             font-size:16px;
-            background: linear-gradient(180deg,#071026 0%, #071833 60%);
-            color:#e6eef8;
+            background: var(--bg);
+            color: var(--text);
             -webkit-font-smoothing:antialiased;
             overflow:hidden
         }
         .wrap{max-width:760px;margin:0 auto;padding:20px;width:100%;height:100vh;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
-        .player-card{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02)); border-radius:16px; padding:16px; box-shadow:0 6px 30px rgba(2,6,23,0.6); display:flex; flex-direction:column; gap:12px; max-height:calc(100% - 40px); overflow:hidden; width:100%}
+        .player-card{background:var(--card); border-radius:16px; padding:16px; box-shadow:0 6px 30px rgba(2,6,23,0.6); display:flex; flex-direction:column; gap:12px; max-height:calc(100% - 40px); overflow:hidden; width:100%}
         .top{display:flex;gap:12px;align-items:center}
-        .cover{width:84px;height:84px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#6b8cff);flex:0 0 84px;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.95)}
+        .cover{width:84px;height:84px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));flex:0 0 84px;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--text)}
         .meta{flex:1;min-width:0}
-        .title{font-size:18px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .title{font-size:18px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .artist{font-size:14px;color:var(--muted);margin-top:7px}
 
         .progress-wrap{padding:6px 0}
-        .progress-bar{height:8px;background:var(--glass);border-radius:999px;position:relative;overflow:hidden;touch-action:none}
-        .progress-buffer{position:absolute;left:0;top:0;height:100%;background:rgba(255,255,255,0.06);width:0}
-        .progress-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent),#6b8cff);width:0}
+        .progress-bar{height:8px;background:var(--progress-track, var(--glass));border-radius:999px;position:relative;overflow:hidden;touch-action:none}
+        .progress-buffer{position:absolute;left:0;top:0;height:100%;background:var(--progress-buffer, rgba(255,255,255,0.06));width:0}
+        .progress-fill{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0}
         .time{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:8px}
 
         .controls{display:flex;gap:20px;align-items:center;justify-content:center;padding:8px}
@@ -58,12 +91,20 @@
         }
 
         .search-box{margin-top:6px}
-        .search-input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:14px}
+        .search-input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);background:var(--search-bg, transparent);color:var(--text);font-size:14px}
+
+        /* Theming helpers */
+        .fav-btn{color:var(--star-color, #ffcc33);}
+        .big-btn{background:var(--play-btn-bg, #fff);color:var(--play-btn-icon, var(--accent));box-shadow:0 6px 18px rgba(11,20,32,0.3)}
+        .controls .btn{color:var(--control-color, var(--text));}
+        .progress-bar{background:var(--progress-track, rgba(255,255,255,0.06));}
+        .progress-buffer{background:var(--progress-buffer, rgba(255,255,255,0.04));}
+        .song-item{background:var(--list-item-bg, transparent)}
 
         .playlist{overflow:auto;margin-top:8px;border-radius:8px;padding:8px;background:transparent;flex:1;min-height:0}
         .song-item{padding:12px 14px;border-radius:9px;color:var(--muted);font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:10px}
         .song-item + .song-item{margin-top:6px}
-        .song-item.active{background:linear-gradient(90deg, rgba(255,107,107,0.08), rgba(107,140,255,0.06));color:#fff}
+        .song-item.active{background:var(--active-bg);color:var(--text)}
         .no-result{Padding:12px;text-align:center;color:var(--muted);font-size:15px}
 
         @media(min-width:720px){.wrap{padding:24px}.player-card{padding:20px}}
@@ -113,10 +154,13 @@
     <div class="wrap">
         <div class="player-card">
             <div class="top">
-                <div class="cover" id="cover">歌</div>
+                <div class="cover" id="cover">未知</div>
                 <div class="meta">
                     <div class="title" id="songTitle">未播放歌曲</div>
                     <div class="artist" id="artist">未知艺术家</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <button id="themeToggle" class="btn" aria-label="切换主题" title="切换主题">🌙</button>
                 </div>
             </div>
 
@@ -184,6 +228,10 @@
         // 收藏功能
         const FAVORITES_KEY = 'lizhi_favorites_v1';
         let favorites = [];
+        // 主题存储键
+        const THEME_KEY = 'lizhi_theme_v1';
+        // 默认主题: 'dark' or 'light'
+        let currentTheme = 'dark';
         function loadFavorites(){
             try{
                 const raw = localStorage.getItem(FAVORITES_KEY);
@@ -202,6 +250,26 @@
             saveFavorites();
             renderPlaylist();
             renderStatusPanel();
+        }
+
+        // 主题管理
+        function applyTheme(theme){
+            try{
+                if (theme === 'light') document.body.classList.add('theme-light');
+                else document.body.classList.remove('theme-light');
+                currentTheme = theme;
+                try{ localStorage.setItem(THEME_KEY, theme); }catch(e){}
+                const btn = document.getElementById('themeToggle');
+                if (btn) btn.textContent = theme === 'light' ? '☀️' : '🌙';
+            }catch(e){ console.warn('applyTheme failed', e); }
+        }
+
+        function loadTheme(){
+            try{
+                const t = localStorage.getItem(THEME_KEY);
+                if (t === 'light') applyTheme('light');
+                else applyTheme('dark');
+            }catch(e){ applyTheme('dark'); }
         }
 
         // -----------------------------
@@ -350,7 +418,7 @@
                 left.style.gap = '8px';
 
                 const favBtn = document.createElement('button');
-                favBtn.className = 'btn';
+                favBtn.className = 'btn fav-btn';
                 favBtn.style.fontSize = '20px';
                 favBtn.style.width = '28px';
                 favBtn.style.height = '28px';
@@ -462,8 +530,8 @@
                 panel.style.position = 'fixed';
                 panel.style.right = '8px';
                 panel.style.bottom = '8px';
-                panel.style.background = 'rgba(0,0,0,0.6)';
-                panel.style.color = '#fff';
+                panel.style.background = 'var(--panel-bg)';
+                panel.style.color = 'var(--text)';
                 panel.style.fontSize = '12px';
                 panel.style.padding = '8px';
                 panel.style.borderRadius = '8px';
@@ -495,10 +563,10 @@
             html += `<div style="margin-bottom:6px"><strong>song:</strong> ${songList[currentIndex]?songList[currentIndex].title:'-'} &nbsp; <strong>retries:</strong> ${attempts}</div>`;
             html += `<div style="margin-bottom:6px;color:#f88"><strong>lastErr:</strong> ${lastAudioError? lastAudioError : '-'}</div>`;
             html += `<div style="margin:6px 0"><button id="__dbg_export" style="margin-right:6px">导出日志</button><button id="__dbg_clear">清除日志</button></div>`;
-            html += `<div style="max-height:160px;overflow:auto;border-top:1px solid rgba(255,255,255,0.04);padding-top:6px">`;
+            html += `<div style="max-height:160px;overflow:auto;border-top:1px solid var(--panel-border, rgba(255,255,255,0.04));padding-top:6px">`;
             if (events.length === 0) html += '<div style="color:#9aa4b2">(无事件)</div>';
             else events.forEach(ev => {
-                html += `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02)"><div style="font-weight:600">${ev.t} — ${ev.name}</div><div style="color:#9aa4b2;font-size:11px">${ev.detail||''} vis:${ev.visibility} paused:${ev.audioPaused} src:${ev.src?decodeURIComponent(ev.src.split('/').pop()):'-'}</div></div>`;
+                html += `<div style="padding:4px 0;border-bottom:1px solid var(--panel-border, rgba(255,255,255,0.02))"><div style="font-weight:600">${ev.t} — ${ev.name}</div><div style="color:var(--muted);font-size:11px">${ev.detail||''} vis:${ev.visibility} paused:${ev.audioPaused} src:${ev.src?decodeURIComponent(ev.src.split('/').pop()):'-'}</div></div>`;
             });
             html += `</div>`;
             panel.innerHTML = html;
@@ -547,8 +615,8 @@
                     t.style.left = '50%';
                     t.style.bottom = '20px';
                     t.style.transform = 'translateX(-50%)';
-                    t.style.background = 'rgba(0,0,0,0.7)';
-                    t.style.color = '#fff';
+                    t.style.background = 'var(--panel-bg)';
+                    t.style.color = 'var(--text)';
                     t.style.padding = '8px 12px';
                     t.style.borderRadius = '8px';
                     t.style.zIndex = 999999;
@@ -668,6 +736,19 @@
             try{ if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'; }catch(e){}
             renderStatusPanel();
         };
+
+        // 绑定主题切换按钮
+        try{
+            const themeBtn = document.getElementById('themeToggle');
+            if (themeBtn) {
+                themeBtn.addEventListener('click', (e)=>{
+                    e.stopPropagation();
+                    const next = currentTheme === 'light' ? 'dark' : 'light';
+                    applyTheme(next);
+                    try{ if (DEBUG) pushLog('theme.toggle', next); }catch(e){}
+                });
+            }
+        }catch(e){ }
 
         function getDisplayList() {
             const favs = [], others = [];
@@ -830,6 +911,8 @@
         // 初始化加载歌曲列表
         // 加载本地收藏与歌曲列表
         loadFavorites();
+        // 恢复主题
+        loadTheme();
         loadSongs();
     </script>
 </body>
