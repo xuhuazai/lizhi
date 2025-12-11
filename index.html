@@ -186,6 +186,7 @@
                         <path d="M6 6l8.5 6-8.5 6V6zm11 0h2v12h-2V6z" fill="currentColor"/>
                     </svg>
                 </button>
+                <button class="btn" id="modeToggle" aria-label="切换播放模式" title="切换播放模式">🔁</button>
             </div>
 
             <div class="search-box"><input id="searchInput" class="search-input" placeholder="搜索歌曲..."/></div>
@@ -270,6 +271,42 @@
                 if (t === 'light') applyTheme('light');
                 else applyTheme('dark');
             }catch(e){ applyTheme('dark'); }
+        }
+
+        // 播放模式管理
+        const PLAY_MODE_KEY = 'lizhi_play_mode_v1';
+        // 'playlist' | 'repeat-one' | 'shuffle'
+        let playMode = 'playlist';
+
+        function loadPlayMode(){
+            try{
+                const m = localStorage.getItem(PLAY_MODE_KEY);
+                if (m) playMode = m;
+                updateModeButton();
+            }catch(e){}
+        }
+
+        function savePlayMode(){
+            try{ localStorage.setItem(PLAY_MODE_KEY, playMode); }catch(e){}
+        }
+
+        function cyclePlayMode(){
+            if (playMode === 'playlist') playMode = 'repeat-one';
+            else if (playMode === 'repeat-one') playMode = 'shuffle';
+            else playMode = 'playlist';
+            savePlayMode();
+            updateModeButton();
+            try{ if (DEBUG) pushLog('playmode.change', playMode); }catch(e){}
+        }
+
+        function updateModeButton(){
+            const btn = document.getElementById('modeToggle');
+            if (!btn) return;
+            if (playMode === 'playlist') btn.textContent = '🔁';
+            else if (playMode === 'repeat-one') btn.textContent = '🔂';
+            else btn.textContent = '🔀';
+            btn.title = playMode === 'playlist' ? '顺序播放' : (playMode === 'repeat-one' ? '单曲循环' : '随机播放');
+            renderStatusPanel();
         }
 
         // -----------------------------
@@ -634,14 +671,39 @@
         let nextScheduled = false;
         function playNext(reason){
             try{ pushLog('play.next.request', reason || 'auto'); }catch(e){}
-            if (!songList.length) return;
-            currentIndex = (currentIndex + 1) % songList.length;
-            isPlaying = true;
-            nextScheduled = false;
-            // ensure retryCounts reset for new track
-            try{ retryCounts[String(currentIndex)] = retryCounts[String(currentIndex)] || 0; }catch(e){}
-            playSong();
-            scrollToActiveSong();
+                // 兼容播放模式：顺序 / 单曲 / 随机
+                const list = getDisplayList();
+                if (!list || list.length === 0) return;
+
+                if (playMode === 'repeat-one'){
+                    // 重播当前
+                    playSong(list[currentIndex], currentIndex);
+                    try{ if (DEBUG) pushLog('player.next', 'repeat-one'); }catch(e){}
+                    return;
+                }
+
+                if (playMode === 'shuffle'){
+                    // 随机选择下一个，不等于当前
+                    if (list.length === 1){
+                        playSong(list[0], 0);
+                        return;
+                    }
+                    let nextIndex = currentIndex;
+                    let attempts = 0;
+                    while(nextIndex === currentIndex && attempts < 8){
+                        nextIndex = Math.floor(Math.random() * list.length);
+                        attempts++;
+                    }
+                    currentIndex = nextIndex;
+                    playSong(list[currentIndex], currentIndex);
+                    try{ if (DEBUG) pushLog('player.next', 'shuffle'); }catch(e){}
+                    return;
+                }
+
+                // 默认：按显示顺序播放
+                currentIndex = (currentIndex + 1) % list.length;
+                playSong(list[currentIndex], currentIndex);
+                try{ if (DEBUG) pushLog('player.next', reason); }catch(e){}
         }
 
         function playSong() {
@@ -750,6 +812,17 @@
             }
         }catch(e){ }
 
+        // 绑定播放模式按钮
+        try{
+            const modeBtn = document.getElementById('modeToggle');
+            if (modeBtn) {
+                modeBtn.addEventListener('click', (e)=>{
+                    e.stopPropagation();
+                    cyclePlayMode();
+                });
+            }
+        }catch(e){}
+
         function getDisplayList() {
             const favs = [], others = [];
             filteredList.forEach(s => { if (isFavorite(s.url)) favs.push(s); else others.push(s); });
@@ -772,19 +845,7 @@
             scrollToActiveSong();
         };
 
-        nextBtn.onclick = () => {
-            const displayList = getDisplayList();
-            if (!displayList.length) return;
-            let curIdx = displayList.findIndex(s => songList[currentIndex] && s.url === songList[currentIndex].url);
-            if (curIdx === -1) curIdx = 0;
-            let nextIdx = (curIdx + 1) % displayList.length;
-            const idx = songList.findIndex(s => s.url === displayList[nextIdx].url);
-            if (idx !== -1) currentIndex = idx;
-            else currentIndex = 0;
-            isPlaying = true;
-            playSong();
-            scrollToActiveSong();
-        };
+        nextBtn.onclick = () => { playNext('manual'); scrollToActiveSong(); };
 
         function scrollToActiveSong() {
             const activeItem = document.querySelector('.song-item.active');
@@ -906,13 +967,15 @@
             return `${m}:${s}`;
         }
 
-        audio.onended = () => nextBtn.click();
+        audio.onended = () => playNext('ended');
 
         // 初始化加载歌曲列表
         // 加载本地收藏与歌曲列表
         loadFavorites();
         // 恢复主题
         loadTheme();
+        // 恢复播放模式
+        loadPlayMode();
         loadSongs();
     </script>
 </body>
