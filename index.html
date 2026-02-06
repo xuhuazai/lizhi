@@ -404,7 +404,7 @@
 
         async function loadSongs() {
             try {
-                const res = await fetch('https://cdn.jsdelivr.net/gh/nj-lizhi/song/audio/download.txt');
+                const res = await fetch('https://cdn.jsdmirror.com/gh/nj-lizhi/song/audio/download.txt');
                 if (!res.ok) throw new Error('加载失败');
 
                 const text = await res.text();
